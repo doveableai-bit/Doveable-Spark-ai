@@ -1,0 +1,5 @@
+{
+  "name": "Doveable AI Website Builder",
+  "description": "An AI-powered website builder that creates fully functional websites from a single prompt. Features a chat interface, file explorer, and a live preview.",
+  "requestFramePermissions": []
+}
