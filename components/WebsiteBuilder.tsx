@@ -13,7 +13,8 @@ import {
     CoinsIcon, NewProjectIcon, HomeIcon, 
     CogIcon, FolderIcon, LogoutIcon, PencilIcon, ArrowDownTrayIcon,
     ArrowsPointingOutIcon, ComputerDesktopIcon, DeviceTabletIcon, DevicePhoneMobileIcon, CodeBracketIcon,
-    ChevronUpIcon, ChevronDownIcon, MenuIcon, XIcon, RocketIcon, GitHubIcon, SupabaseIcon, CheckIcon, TerminalIcon
+    ChevronUpIcon, ChevronDownIcon, MenuIcon, XIcon, RocketIcon, GitHubIcon, SupabaseIcon, CheckIcon, TerminalIcon,
+    RefreshIcon
 } from './icons/Icons';
 import Sidebar from './Sidebar';
 import { LogsPanel } from './LogsPanel';
@@ -518,10 +519,10 @@ const Toolbar: React.FC<{
                         </div>
                     )}
                  </div>
-                 <button onClick={onRefresh} className="p-1.5 hover:bg-gray-100 rounded-md">
-                     <img src="https://i.supaimg.com/45364f3b-1ff8-4786-b8f2-c8c79c2f9c5d.jpg" alt="Refresh" className="w-4 h-4" />
-                 </button>
                  <div className="h-4 w-px bg-gray-200 mx-2"></div>
+                 <button onClick={onRefresh} title="Refresh Preview" className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600">
+                     <RefreshIcon className="w-4 h-4" />
+                 </button>
                  <button 
                     onClick={onToggleLogs} 
                     title={isLogsPanelOpen ? "Hide Logs" : "Show Logs"} 
@@ -564,25 +565,6 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
     const addLog = useCallback((message: string, type: AiLog['type'] = 'info') => {
         setLogs(prev => [...prev, { id: crypto.randomUUID(), timestamp: new Date().toISOString(), message, type }]);
     }, []);
-
-    useEffect(() => {
-        if (!activeProject) {
-            // Create a default project on initial load to show the dashboard immediately.
-            const defaultProject: Project = {
-                id: crypto.randomUUID(),
-                name: 'Untitled Project',
-                description: 'A new website project.',
-                files: [],
-                savedAt: new Date(),
-                chatHistory: initialMessages,
-                srcDoc: '',
-                history: [],
-            };
-            setActiveProject(defaultProject);
-            setProjects([defaultProject]);
-            addLog(`Started new project: "Untitled Project"`, 'info');
-        }
-    }, [activeProject, addLog]);
 
     const srcDoc = useMemo(() => {
         if (!files || files.length === 0) {
@@ -795,8 +777,12 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
                 id: crypto.randomUUID(),
                 role: 'model',
                 content: modelMessageContent,
-                rollbackStateIndex: rollbackIndex,
             };
+
+            // Only add rollback capability for modifications, not initial creation.
+            if (project.files.length > 0) {
+                modelMessage.rollbackStateIndex = rollbackIndex;
+            }
             
             const finalMessages = [...newMessages, modelMessage];
             setMessages(finalMessages);
