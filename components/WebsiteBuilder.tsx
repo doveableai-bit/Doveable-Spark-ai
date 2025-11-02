@@ -1,14 +1,15 @@
-
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { PreviewPanel } from './PreviewPanel';
-import { FileNode, ChatMessage, AiLog, GenerationState, DriveAccount, Project } from '../types';
+import { FileNode, ChatMessage, AiLog, GenerationState, DriveAccount, Project, Learning, User, CoinRate } from '../types';
 import { generateWebsite } from '../services/geminiService';
 import { googleDriveService } from '../services/googleDriveService';
 import { supabaseService } from '../services/supabaseService';
 import { githubService } from '../services/githubService';
+import { learningService } from '../services/learningService';
 import { MyProjectsModal } from './MyProjectsModal';
 import { SupabaseModal } from './SupabaseModal';
 import { GitHubModal } from './GitHubModal';
+import { TeachDoveableModal } from './TeachDoveableModal';
 import { 
     CoinsIcon, NewProjectIcon, HomeIcon, 
     CogIcon, FolderIcon, LogoutIcon, PencilIcon, ArrowDownTrayIcon,
@@ -18,14 +19,20 @@ import {
 } from './icons/Icons';
 import Sidebar from './Sidebar';
 import { LogsPanel } from './LogsPanel';
+import { PaymentModal } from './PaymentModal';
+import { InsufficientCoinsModal } from './InsufficientCoinsModal';
 
 declare var JSZip: any;
+
+const PROJECTS_STORAGE_KEY = 'doveable_ai_projects';
+const USER_STORAGE_KEY = 'doveable_ai_user';
 
 const initialMessages: ChatMessage[] = [
     {
         id: crypto.randomUUID(),
         role: 'model',
-        content: "Hello! I'm Doveable AI.\n\n- Describe the website you want to build, or ask me to edit the current one."
+        content: "I can now build complete, interactive web applications for you.",
+        aiSummary: "Hello! I'm Doveable AI.\n\n- Describe the website or app you want to build.",
     }
 ];
 
@@ -37,7 +44,34 @@ const constructSrcDoc = (files: FileNode[]): string => {
 
   let processedHtml = htmlFile.content;
 
-  processedHtml = processedHtml.replace(/<link[^>]+href="([^"]+\.css)"[^>]*>/g, (match, path) => {
+  // This regex finds script tags with a `src` attribute.
+  // It now specifically looks for module scripts to avoid replacing non-module scripts incorrectly.
+  processedHtml = processedHtml.replace(/<script type="module"[^>]+src="([^"]+)"[^>]*>(?:<\/script>)?/g, (match, path) => {
+    const cleanPath = path.startsWith('./') ? path.substring(2) : path;
+    const jsFile = files.find(f => f.path === cleanPath);
+    if (jsFile) {
+      let scriptContent = jsFile.content;
+      // Handle imports inside the JS file.
+      // This is a naive implementation and might not cover all edge cases,
+      // but it handles direct relative imports.
+      scriptContent = scriptContent.replace(/from\s+['"](\.\/[^'"]+)['"]/g, (importMatch, importPath) => {
+        const resolvedPath = importPath.endsWith('.js') ? importPath.substring(2) : `${importPath.substring(2)}.js`;
+        const importedFile = files.find(f => f.path === resolvedPath);
+        if (importedFile) {
+          // This is a major simplification. We can't actually bundle the code here.
+          // Instead, we might need a more sophisticated preview mechanism for React apps.
+          // For now, let's just log that we found it.
+          console.log(`Previewer found import for: ${resolvedPath}. This won't be bundled in the preview.`);
+        }
+        return importMatch; // Return original import statement
+      });
+      return `<script type="module">${scriptContent}</script>`;
+    }
+    return match;
+  });
+
+  // Handle CSS links
+   processedHtml = processedHtml.replace(/<link[^>]+href="([^"]+\.css)"[^>]*>/g, (match, path) => {
     const cleanPath = path.startsWith('./') ? path.substring(2) : path;
     const cssFile = files.find(f => f.path === cleanPath);
     if (cssFile) {
@@ -46,19 +80,69 @@ const constructSrcDoc = (files: FileNode[]): string => {
     return match;
   });
 
-  processedHtml = processedHtml.replace(/<script[^>]+src="([^"]+\.js)"[^>]*>(?:<\/script>)?/g, (match, path) => {
-    const cleanPath = path.startsWith('./') ? path.substring(2) : path;
-    const jsFile = files.find(f => f.path === cleanPath);
-    if (jsFile) {
-      if (!match.includes('type=')) {
-         return `<script type="module">${jsFile.content}</script>`;
-      }
-      return `<script type="module">${jsFile.content}</script>`;
-    }
-    return match;
-  });
-
   return processedHtml;
+};
+
+const loadProjectsFromStorage = (): Project[] => {
+    try {
+        const storedData = localStorage.getItem(PROJECTS_STORAGE_KEY);
+        if (storedData) {
+            const parsedProjects = JSON.parse(storedData);
+            // Dates are stored as strings in JSON, so we need to convert them back
+            return parsedProjects.map((project: any) => ({
+                ...project,
+                savedAt: new Date(project.savedAt),
+                history: (project.history || []).map((historyItem: any) => ({
+                    ...historyItem,
+                    savedAt: new Date(historyItem.savedAt),
+                })),
+                chatHistory: (project.chatHistory || []).map((chat: any) => ({
+                    ...chat
+                })),
+                freePromptUsed: project.freePromptUsed ?? false, // Default to false for old projects
+            }));
+        }
+    } catch (error) {
+        console.error("Failed to load projects from local storage:", error);
+    }
+    return [];
+};
+
+const saveProjectsToStorage = (projects: Project[]) => {
+    try {
+        localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
+    } catch (error) {
+        console.error("Failed to save projects to local storage:", error);
+    }
+};
+
+const loadUserFromStorage = (): User => {
+    try {
+        const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+        if (storedUser) {
+            return JSON.parse(storedUser);
+        }
+    } catch (error) {
+        console.error("Failed to load user data from storage:", error);
+    }
+    // Default user state
+    return { 
+        id: 'default-user',
+        name: 'User Name', 
+        email: 'user@example.com', 
+        coins: 100,
+        role: 'user',
+        subscriptionStatus: 'inactive',
+        plan: 'free',
+    };
+};
+
+const saveUserToStorage = (user: User) => {
+    try {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    } catch (error) {
+        console.error("Failed to save user data to storage:", error);
+    }
 };
 
 const NewProjectModal: React.FC<{
@@ -253,14 +337,15 @@ const MainHeader: React.FC<{
     onNavigateHome: () => void;
     projectCount: number;
     onOpenProjects: () => void;
-    user: { name: string; email: string };
+    user: User;
     onUpdateProjectName: (newName: string) => void;
     onDownloadZip: () => void;
     supabaseStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
     githubStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
     onConnectSupabase: () => void;
     onConnectGitHub: () => void;
-}> = ({ projectName, onUpdateProjectName, onDownloadZip, onNavigateHome, projectCount, onOpenProjects, user, supabaseStatus, githubStatus, onConnectSupabase, onConnectGitHub }) => {
+    onNavigateToSubscriptions: () => void;
+}> = ({ projectName, onUpdateProjectName, onDownloadZip, onNavigateHome, projectCount, onOpenProjects, user, supabaseStatus, githubStatus, onConnectSupabase, onConnectGitHub, onNavigateToSubscriptions }) => {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isDeployMenuOpen, setIsDeployMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
@@ -375,9 +460,9 @@ const MainHeader: React.FC<{
                  <div className="h-6 w-px bg-gray-200"></div>
 
                  <div className="flex items-center space-x-2">
-                    <button className="flex items-center justify-center space-x-2 px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 rounded-md text-sm font-medium text-yellow-800">
+                    <button onClick={onNavigateToSubscriptions} className="flex items-center justify-center space-x-2 px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 rounded-md text-sm font-medium text-yellow-800">
                         <CoinsIcon className="w-4 h-4" />
-                        <span>100 Credits</span>
+                        <span>{user.coins} Coins</span>
                     </button>
                     <div className="relative" ref={userMenuRef}>
                         <button 
@@ -405,9 +490,9 @@ const MainHeader: React.FC<{
                                         <HomeIcon className="w-4 h-4 mr-3 text-gray-500" />
                                         <span>Home page</span>
                                     </a>
-                                    <a href="#" onClick={() => setIsUserMenuOpen(false)} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <a href="#" onClick={(e) => {e.preventDefault(); onNavigateToSubscriptions(); setIsUserMenuOpen(false);}} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                         <CoinsIcon className="w-4 h-4 mr-3 text-gray-500" />
-                                        <span>Get coin</span>
+                                        <span>Get coins</span>
                                     </a>
                                     <a href="#" onClick={() => setIsUserMenuOpen(false)} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                         <CogIcon className="w-4 h-4 mr-3 text-gray-500" />
@@ -537,19 +622,21 @@ const Toolbar: React.FC<{
 }
 
 
-export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNavigateHome }) => {
+export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateToSubscriptions: () => void; }> = ({ onNavigateHome, onNavigateToSubscriptions }) => {
     const [files, setFiles] = useState<FileNode[]>([]);
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
     const [logs, setLogs] = useState<AiLog[]>([]);
     const [generationState, setGenerationState] = useState<GenerationState>('idle');
     const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
     const [activeDriveAccount, setActiveDriveAccount] = useState<DriveAccount | null>(null);
+    
     const [projects, setProjects] = useState<Project[]>([]);
+    
     const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
     const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
     const [previewKey, setPreviewKey] = useState(0);
-    const [user, setUser] = useState({ name: 'User Name', email: 'user@example.com' });
+    const [user, setUser] = useState<User>(() => loadUserFromStorage());
     
     const [activeProject, setActiveProject] = useState<Project | null>(null);
     const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -561,10 +648,82 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
     const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
 
     const [isLogsPanelOpen, setIsLogsPanelOpen] = useState(true);
+    const [isTeachModalOpen, setIsTeachModalOpen] = useState(false);
+    const [learnings, setLearnings] = useState<Learning[]>([]);
+    
+    const [attachment, setAttachment] = useState<{ file: File; dataUrl: string } | null>(null);
+    const isFirstRender = useRef(true);
+
+    const [isCoinsModalOpen, setIsCoinsModalOpen] = useState(false);
+    const [coinRates, setCoinRates] = useState<CoinRate[]>([]);
 
     const addLog = useCallback((message: string, type: AiLog['type'] = 'info') => {
         setLogs(prev => [...prev, { id: crypto.randomUUID(), timestamp: new Date().toISOString(), message, type }]);
     }, []);
+    
+    const handleLoadProject = useCallback((projectToLoad: Project) => {
+        setActiveProject(projectToLoad);
+        setFiles(projectToLoad.files);
+        setMessages(projectToLoad.chatHistory.length > 0 ? projectToLoad.chatHistory : initialMessages);
+        addLog(`Loaded project "${projectToLoad.name}".`, 'success');
+    }, [addLog]);
+
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            
+            const loadedProjects = loadProjectsFromStorage();
+            
+            if (loadedProjects.length > 0) {
+                setProjects(loadedProjects);
+                // Sort by savedAt date to find the most recent project
+                const sortedProjects = [...loadedProjects].sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+                const lastProject = sortedProjects[0];
+                handleLoadProject(lastProject);
+                addLog(`Automatically loaded your most recent project: "${lastProject.name}".`);
+            } else {
+                // No projects exist, create a new default one
+                const defaultProject: Project = {
+                    id: crypto.randomUUID(),
+                    name: "My First Project",
+                    description: "A new website generated by Doveable AI",
+                    files: [],
+                    savedAt: new Date(),
+                    chatHistory: initialMessages,
+                    srcDoc: '',
+                    history: [],
+                    freePromptUsed: false,
+                };
+                setProjects([defaultProject]);
+                setActiveProject(defaultProject);
+                setFiles([]);
+                setMessages(initialMessages);
+                addLog(`Welcome! Started your first project: "${defaultProject.name}"`);
+            }
+        }
+    }, [addLog, handleLoadProject]);
+
+    useEffect(() => {
+        saveProjectsToStorage(projects);
+    }, [projects]);
+    
+    useEffect(() => {
+        saveUserToStorage(user);
+    }, [user]);
+
+
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            const initialLearnings = await learningService.getLearnings();
+            setLearnings(initialLearnings);
+            addLog(`Loaded ${initialLearnings.length} learnings from knowledge base.`);
+            
+            const rates = await supabaseService.getCoinRates();
+            setCoinRates(rates);
+            addLog(`Loaded ${rates.length} coin rate plans.`);
+        };
+        fetchInitialData();
+    }, [addLog]);
 
     const srcDoc = useMemo(() => {
         if (!files || files.length === 0) {
@@ -688,39 +847,41 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
         }
     }, [supabaseStatus, githubStatus, addLog]);
 
-    const handleLoadProject = useCallback((projectToLoad: Project) => {
-        setActiveProject(projectToLoad);
-        setFiles(projectToLoad.files);
-        setMessages(projectToLoad.chatHistory.length > 0 ? projectToLoad.chatHistory : initialMessages);
-        addLog(`Loaded project "${projectToLoad.name}".`, 'success');
-    }, [addLog]);
-
     const handleRollback = useCallback((stateIndex: number) => {
         if (!activeProject || !activeProject.history[stateIndex]) {
             addLog("No state found to roll back to.", 'error');
             return;
         }
     
-        addLog(`Rolling back to state #${stateIndex + 1}...`, 'info');
+        addLog(`Rolling back to project state from before change #${stateIndex + 1}...`, 'info');
     
         const stateToRestore = activeProject.history[stateIndex];
-        const newHistoryForRestoredState = activeProject.history.slice(0, stateIndex);
-
+    
+        // Create the updated project state after the rollback
+        const rolledBackProject: Project = {
+            ...activeProject, // Keep current project ID, name, etc.
+            files: stateToRestore.files, // Use files from the historical state
+            srcDoc: stateToRestore.srcDoc, // Use srcDoc from the historical state
+            // Keep the current chat history so old rollback buttons are not lost
+            chatHistory: messages, 
+            history: activeProject.history, // Keep the full, unmodified history array
+            branchedFrom: { index: stateIndex, totalHistoryLength: activeProject.history.length }
+        };
+    
+        // Update the application state
+        setActiveProject(rolledBackProject);
+        setFiles(rolledBackProject.files);
+        
+        // Add a new system message to the existing chat history to inform the user
         const rollbackMessage: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'system',
-            content: `Project state restored to version from before change #${stateIndex + 1}.`,
+            content: `Project restored to the version before change #${stateIndex + 1}. Your next change will create a new branch in history.`,
         };
+        setMessages(prevMessages => [...prevMessages, rollbackMessage]);
     
-        const projectToLoad = {
-            ...stateToRestore,
-            history: newHistoryForRestoredState,
-            chatHistory: [...stateToRestore.chatHistory, rollbackMessage],
-        };
-    
-        handleLoadProject(projectToLoad);
-        addLog("Rollback successful.", 'success');
-    }, [activeProject, addLog, handleLoadProject]);
+        addLog("Rollback successful. The next change will branch from this point.", 'success');
+    }, [activeProject, messages, addLog]);
 
     const handleUpdateProjectName = useCallback((projectId: string, newName: string) => {
         setProjects(prevProjects =>
@@ -751,53 +912,109 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
         setIsNewProjectModalOpen(true);
     };
     
-    const runGeneration = useCallback(async (prompt: string, project: Project) => {
-        const stateToSaveInHistory = { ...project, history: [] }; 
-        const updatedHistory = [...project.history, stateToSaveInHistory];
-        const rollbackIndex = project.history.length;
+    const runGeneration = useCallback(async (prompt: string, project: Project, attachment: { file: File; dataUrl: string } | null) => {
+        const isFreePrompt = !project.freePromptUsed;
+        const promptCost = 10;
+        
+        if (!isFreePrompt && user.coins < promptCost) {
+            addLog('Generation failed: Insufficient coins.', 'error');
+            setIsCoinsModalOpen(true);
+            return;
+        }
+
+        const startTime = Date.now();
+        const isModification = project.files && project.files.length > 0;
+        
+        const isBranching = !!project.branchedFrom;
+        const baseHistory = project.history;
+
+        const stateToSaveInHistory = isModification ? { ...project, history: [], branchedFrom: undefined } : null;
+        const updatedHistory = stateToSaveInHistory ? [...baseHistory, stateToSaveInHistory] : baseHistory;
+        
+        const rollbackIndex = isModification ? baseHistory.length : -1;
 
         setGenerationState('generating');
         addLog(`Generating with prompt: "${prompt}"`);
 
         const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: prompt };
+        if (attachment) {
+            userMessage.attachment = {
+                name: attachment.file.name,
+                type: attachment.file.type,
+                dataUrl: attachment.dataUrl,
+            };
+        }
         
         const currentMessages = (project.chatHistory && project.chatHistory.length > 0) ? project.chatHistory : initialMessages;
-        const newMessages: ChatMessage[] = [...currentMessages, userMessage];
+        const newMessages: ChatMessage[] = [...currentMessages.filter(m => m.aiSummary !== "Hello! I'm Doveable AI.\n\n- Describe the website you want to build, or ask me to edit the current one."), userMessage];
         setMessages(newMessages);
 
         try {
-            const newFiles = await generateWebsite(prompt, project);
-            addLog(`Received ${newFiles.length} files from AI.`, 'success');
+            const aiResponse = await generateWebsite(prompt, project, attachment);
+            const endTime = Date.now();
+            const durationInSeconds = Math.round((endTime - startTime) / 1000);
             
-            const modelMessageContent = project.files.length > 0
-                ? "I've updated the website based on your request. Let me know what you think!"
-                : "I've created the first version of your website. Take a look at the preview!";
+            addLog(`Received ${aiResponse.files.length} total files from AI.`, 'success');
 
             const modelMessage: ChatMessage = {
                 id: crypto.randomUUID(),
                 role: 'model',
-                content: modelMessageContent,
+                content: aiResponse.summary,
+                aiSummary: aiResponse.aiSummary,
+                commitMessage: aiResponse.commitMessage,
+                thoughtDuration: durationInSeconds,
+                editsMade: aiResponse.changedFileCount,
+                generatedFiles: aiResponse.files.map(file => ({ path: file.path })),
             };
 
-            // Only add rollback capability for modifications, not initial creation.
-            if (project.files.length > 0) {
+            if (isModification) {
                 modelMessage.rollbackStateIndex = rollbackIndex;
+                let label: string;
+                if (isBranching) {
+                    const parentNumber = project.branchedFrom!.index + 1;
+                    const newSequentialNumber = updatedHistory.length;
+                    label = `(${parentNumber}/${newSequentialNumber})`;
+                } else {
+                    label = `(#${updatedHistory.length})`;
+                }
+                modelMessage.rollbackLabel = label;
             }
             
-            const finalMessages = [...newMessages, modelMessage];
+            let finalMessages = [...newMessages, modelMessage];
+            
+            const htmlFiles = aiResponse.files.filter(f => f.path.endsWith('.html'));
+            const isReactApp = aiResponse.files.some(f => f.path.endsWith('.js') && f.content.includes('React.createElement'));
+            if (htmlFiles.length > 1 && !isReactApp) {
+                const multiPageMessage: ChatMessage = {
+                    id: crypto.randomUUID(),
+                    role: 'system',
+                    content: `I've generated a multi-page website. Navigation between pages may not work in this preview, but all files are in the 'Code' tab and will be fully functional when downloaded.`
+                };
+                finalMessages.push(multiPageMessage);
+            }
+
             setMessages(finalMessages);
 
             const updatedProject: Project = {
                 ...project,
-                files: newFiles,
-                srcDoc: constructSrcDoc(newFiles),
+                files: aiResponse.files,
+                srcDoc: constructSrcDoc(aiResponse.files),
                 savedAt: new Date(),
                 chatHistory: finalMessages,
                 history: updatedHistory,
+                branchedFrom: undefined, // Clear the flag
+                freePromptUsed: true, // Mark free prompt as used
             };
+            
+            if (!isFreePrompt) {
+                setUser(prevUser => ({ ...prevUser, coins: prevUser.coins - promptCost }));
+                addLog(`Deducted ${promptCost} coins. New balance: ${user.coins - promptCost}.`, 'info');
+            } else {
+                 addLog('First free prompt used for this project.', 'info');
+            }
 
             setActiveProject(updatedProject);
-            setFiles(newFiles);
+            setFiles(aiResponse.files);
             setProjects(prev => prev.map(p => p.id === project.id ? updatedProject : p));
             setGenerationState('success');
             setPreviewKey(k => k + 1);
@@ -816,7 +1033,7 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
             };
             setMessages(prev => [...prev, errorMessageForChat]);
         }
-    }, [addLog, handleSaveToIntegrations]);
+    }, [addLog, handleSaveToIntegrations, user.coins]);
 
     const handleSendMessage = useCallback((prompt: string, projectOverride?: Project) => {
         const projectToUse = projectOverride || activeProject;
@@ -827,8 +1044,9 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
             return;
         }
         
-        runGeneration(prompt, projectToUse);
-    }, [activeProject, runGeneration]);
+        runGeneration(prompt, projectToUse, attachment);
+        setAttachment(null);
+    }, [activeProject, runGeneration, attachment]);
     
     const handleSaveNewProject = (name: string, description: string) => {
         setIsNewProjectModalOpen(false);
@@ -842,6 +1060,7 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
             chatHistory: initialMessages,
             srcDoc: '',
             history: [],
+            freePromptUsed: false,
         };
 
         setActiveProject(newProject);
@@ -854,6 +1073,23 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
             handleSendMessage(pendingPrompt, newProject);
             setPendingPrompt(null);
         }
+    };
+
+    const handleSaveLearning = async (learningContent: string) => {
+        addLog('Saving new learning to knowledge base...', 'info');
+        try {
+            const newLearning = await learningService.saveLearning(learningContent);
+            setLearnings(prev => [...prev, newLearning]);
+            addLog('Successfully saved new learning!', 'success');
+            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: 'Thanks! I\'ve saved that to my knowledge base to use in the future.' }]);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+            addLog(`Failed to save learning: ${errorMessage}`, 'error');
+        }
+    };
+
+    const handleSwitchToCodeView = () => {
+        setActiveTab('code');
     };
 
     return (
@@ -869,6 +1105,12 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
                 onOpenProjects={() => setIsProjectsModalOpen(true)}
                 onNewProject={handleNewProject}
                 onRollback={handleRollback}
+                onSwitchToCodeView={handleSwitchToCodeView}
+                onTeach={() => setIsTeachModalOpen(true)}
+                activeProject={activeProject}
+                userCoins={user.coins}
+                attachment={attachment}
+                onSetAttachment={setAttachment}
             />
 
             <main className="flex-1 flex flex-col min-w-0">
@@ -887,6 +1129,7 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
                     githubStatus={githubStatus}
                     onConnectSupabase={() => setIsSupabaseModalOpen(true)}
                     onConnectGitHub={() => setIsGitHubModalOpen(true)}
+                    onNavigateToSubscriptions={onNavigateToSubscriptions}
                 />
                 <Toolbar
                     activeTab={activeTab}
@@ -964,6 +1207,22 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void }> = ({ onNav
             isOpen={isGitHubModalOpen}
             onClose={() => setIsGitHubModalOpen(false)}
             onConnect={handleConnectGitHub}
+        />
+
+        <TeachDoveableModal
+            isOpen={isTeachModalOpen}
+            onClose={() => setIsTeachModalOpen(false)}
+            onSave={handleSaveLearning}
+        />
+
+        <InsufficientCoinsModal
+            isOpen={isCoinsModalOpen}
+            onClose={() => setIsCoinsModalOpen(false)}
+            coinRates={coinRates}
+            onNavigateToSubscriptions={() => {
+                setIsCoinsModalOpen(false);
+                onNavigateToSubscriptions();
+            }}
         />
         </>
     );

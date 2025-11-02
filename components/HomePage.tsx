@@ -1,6 +1,7 @@
 import React from 'react';
 import { Header } from './Header';
 import { ArrowUpIcon, ShopIcon, CameraIcon } from './icons/Icons';
+import { AdDisplay } from './AdDisplay';
 
 const ProjectCard: React.FC<{
     bgColor: string;
@@ -27,12 +28,12 @@ const ProjectCard: React.FC<{
 );
 
 
-export const HomePage: React.FC<{ onNavigate: () => void }> = ({ onNavigate }) => {
+export const HomePage: React.FC<{ onNavigate: () => void; onNavigateAdmin: () => void; }> = ({ onNavigate, onNavigateAdmin }) => {
     return (
-        <div className="bg-white min-h-screen font-sans text-gray-800">
+        <div className="bg-white min-h-screen font-sans text-gray-800 flex flex-col">
             <Header onGetStartedClick={onNavigate} />
 
-            <main className="pt-24 pb-16">
+            <main className="flex-grow pt-24 pb-16">
                 <section className="text-center px-4 pt-10">
                     <div className="inline-block bg-gray-100 rounded-full px-3 py-1 text-sm text-gray-600 mb-4">
                         Introducing Doveable x Shopify
@@ -62,7 +63,11 @@ export const HomePage: React.FC<{ onNavigate: () => void }> = ({ onNavigate }) =
                     </div>
                 </section>
 
-                <section className="mt-24">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                   <AdDisplay placement="Top Banner" />
+                </div>
+
+                <section className="mt-12">
                     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-dark">From the Community</h2>
@@ -102,7 +107,18 @@ export const HomePage: React.FC<{ onNavigate: () => void }> = ({ onNavigate }) =
                         </div>
                     </div>
                 </section>
+
+                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                   <AdDisplay placement="Bottom Banner" />
+                </div>
             </main>
+            <footer className="bg-gray-50 border-t border-gray-200">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-sm text-gray-500">
+                    <p>&copy; {new Date().getFullYear()} Doveable AI. All rights reserved. 
+                        <a href="#" onClick={(e) => { e.preventDefault(); onNavigateAdmin(); }} className="ml-4 hover:underline">Admin Login</a>
+                    </p>
+                </div>
+            </footer>
         </div>
     );
 };

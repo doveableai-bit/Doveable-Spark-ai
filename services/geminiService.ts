@@ -1,72 +1,160 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FileNode, Project } from '../types';
+import { learningService } from './learningService';
+import { supabaseService } from './supabaseService';
 
-const API_KEY = process.env.API_KEY;
+const getActiveApiKey = async (): Promise<string> => {
+    const adminKeys = await supabaseService.getAiApiKeys();
+    const activeAdminKey = adminKeys.find(k => k.enabled && k.provider === 'gemini');
 
-if (!API_KEY) {
-  console.error("API_KEY environment variable not set.");
-}
+    if (activeAdminKey && activeAdminKey.key) {
+        console.log("Using active AI API key from Admin Panel.");
+        return activeAdminKey.key;
+    }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
+    console.log("Falling back to environment variable for AI API key.");
+    const envKey = process.env.API_KEY;
+    if (!envKey) {
+        // This will be caught by the calling function and shown to the user.
+        throw new Error("API_KEY environment variable not set and no active key in admin panel.");
+    }
+    return envKey;
+};
 
-const model = 'gemini-2.5-flash';
 
-const baseSystemInstruction = `You are an expert web developer AI. The user will provide a prompt to create a website.
+const baseSystemInstruction = `You are a world-class AI web developer, capable of creating complete, multi-page, and interactive web applications from a single prompt. Your goal is to deliver a production-ready, beautiful, and fully functional website that meets the user's needs.
 
-Here are the project details:
+**Project Details:**
 - Project Name: "{{PROJECT_NAME}}"
 - Project Description: "{{PROJECT_DESCRIPTION}}"
 
-Your task is to generate a complete, functional, and visually appealing website based on these details and the user's specific prompt.
+**Learnings from Past Interactions:**
+You have a knowledge base of learnings. Use these principles to guide your design choices.
+{{LEARNINGS_SECTION}}
 
-**Key requirements:**
+**Your Core Task:**
+Analyze the user's request and decide on the best technical approach. You have a powerful toolkit at your disposal. Your response MUST be a complete, well-structured website. Be proactive—if the user asks for something simple, flesh it out into a full, impressive landing page or multi-page site.
 
-1.  **Content and Structure:**
-    - The website's name is "{{PROJECT_NAME}}". Use this name prominently in the \`<title>\` tag, main \`<h1>\` headings, and other relevant places.
-    - The website should be about "{{PROJECT_DESCRIPTION}}". Use this description to guide the structure, content, functionality, and overall theme of the site.
-    - The generated website MUST be fully responsive.
+**Aesthetics & Design Philosophy:**
+- **Color Palette:** You MUST choose a modern, aesthetically pleasing, and harmonious color palette that fits the project's theme. Use daisyUI theme colors or generate a custom palette with Tailwind. Think about color theory—use primary, secondary, and accent colors effectively.
+- **Attractive Logo:** The inline SVG logo you create must be unique, visually appealing, and relevant to the project's name or purpose. It should look professional.
+- **Visual Hierarchy & Spacing:** Pay close attention to typography, spacing (padding/margins), and visual hierarchy. Elements should be well-aligned and have breathing room. The goal is a clean, polished, and professional final product that is immediately impressive.
 
-2.  **Branding & Logo Generation:**
-    - Act as a professional brand designer. Your goal is to create a visually attractive and memorable branding logo for "{{PROJECT_NAME}}".
-    - The logo MUST be a unique SVG, directly inspired by the project's name and description. Avoid generic icons.
-    - The logo should have a professional color palette that complements the overall theme of the website.
-    - Embed the complete SVG code for the logo directly within the \`index.html\` file, typically in the header/navigation area.
-    - Use Tailwind CSS classes to control the size of the logo (e.g., \`h-8 w-auto\` or similar).
+**Your Technical Toolkit & Capabilities:**
 
-3.  **Output Format:**
-    - You MUST respond with a JSON object ONLY, with no markdown formatting or extra text.
-    - The JSON object must have a single key "files" which is an array of objects.
-    - Each object in the "files" array represents a file and MUST have two keys: "path" (e.g., "index.html", "css/style.css") and "content".
-    - The "content" value must be the full source code for the file as a string. **Crucially, all characters within this string, such as double quotes ("), backslashes (\\), and newlines (\\n), MUST be properly escaped to create a valid JSON string.**
+**1. UI & Styling (Mandatory): daisyUI + Tailwind CSS**
+- You MUST build the UI using the **daisyUI** component library for Tailwind CSS.
+- Include the CDN links in \`index.html\`:
+  \`<link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css" rel="stylesheet" type="text/css" />\`
+  \`<script src="https://cdn.tailwindcss.com"></script>\`
+- Use daisyUI classes (\`card\`, \`hero\`, \`navbar\`, \`btn\`) extensively to create a professional and consistent design.
+- All generated websites MUST be fully responsive. Use Tailwind's responsive prefixes (\`md:\`, \`lg:\`) to ensure the layout adapts perfectly to all screen sizes.
 
-4.  **Technical Specifications:**
-    - Always include an 'index.html' file.
-    - For styling, use Tailwind CSS. You MUST include the Tailwind CSS CDN script (\`<script src="https://cdn.tailwindcss.com"></script>\`) in the \`<head>\` of the 'index.html' file.
-    - If you create JavaScript files, link them in the 'index.html' with \`<script type="module" src="./js/script.js"></script>\` at the end of the \`<body>\`.
-    - Ensure all file paths are relative and correct.`;
+**2. Interactivity (Choose the best tool for the job):**
 
-const modificationSystemInstruction = `You are an expert web developer AI. The user wants to modify an existing website. Your task is to make precise changes to the provided files based on the user's prompt. You MUST respond with a JSON object containing the complete, updated source code for ANY files that were modified.
+  **a) For simple interactions: Alpine.js**
+  - Use Alpine.js for dropdowns, modals, tabs, or showing/hiding elements.
+  - It's already included via CDN. Use it directly in your HTML: \`<div x-data="{ open: false }">\`.
+
+  **b) For dynamic content (without full reloads): htmx**
+  - Use htmx to create modern, dynamic applications that feel like SPAs.
+  - It's already included. Use attributes like \`hx-get\`, \`hx-post\`, \`hx-swap\`, \`hx-target\`.
+  - Example: Load a new page's content into the main area: \`<a href="/about.html" hx-get="/about.html" hx-target="#main-content" hx-swap="innerHTML">About</a>\`
+  
+  **c) For complex, stateful UIs: React**
+  - You can build an entire application using React.
+  - The environment is pre-configured with an import map for React. **DO NOT** use a build step (like JSX transpilation). Write plain JavaScript using \`React.createElement\`.
+  - Structure:
+    - \`index.html\`: Must contain \`<div id="root"></div>\` and \`<script type="module" src="/main.js"></script>\`.
+    - \`main.js\`: The entry point. It should import React and ReactDOM and render your main App component.
+      \`\`\`javascript
+      import React from 'react';
+      import ReactDOM from 'react-dom/client';
+      import App from './App.js'; // Note the .js extension
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(App));
+      \`\`\`
+    - \`App.js\` and other components: Your React components, written using \`React.createElement\`. Remember to import React and any child components.
+
+**3. Website Structure (Choose one):**
+
+  **a) Multi-Page Static Site:**
+  - Create multiple HTML files (e.g., \`index.html\`, \`about.html\`, \`contact.html\`).
+  - Link them using standard \`<a>\` tags.
+  - Use a consistent layout (e.g., same navbar and footer) across all pages.
+
+  **b) Dynamic htmx Site:**
+  - Create a primary \`index.html\` with a main content area (e.g., \`<main id="content">...</main>\`).
+  - Create other HTML files that contain only the content for that specific page (no \`<html>\` or \`<body>\`).
+  - Use htmx attributes on your navigation links to load content from the other files into the main content area.
+
+  **c) React Single-Page Application (SPA):**
+  - Follow the React structure described in section 2c.
+  - Create all UI elements as React components in separate JS files.
+
+**General Rules & Output Format:**
+- **Proactive Content:** Fill the website with professional, relevant placeholder copy.
+- **Logo Generation:** Create a unique inline SVG logo in the HTML, styled with Tailwind CSS.
+- **JSON ONLY:** You MUST respond with a valid JSON object only. No markdown.
+- **File Structure:** The JSON must have keys: "aiSummary", "commitMessage", "summary", and "files".
+- **File Object:** Each item in the "files" array must have "path" and "content" keys.
+- **JSON Validity:** Ensure "content" strings are properly escaped.
+`;
+
+const modificationSystemInstruction = `You are an expert AI web developer. The user wants to modify an existing website. Your task is to make precise changes to the provided files based on the user's prompt. You MUST respond with a JSON object containing the complete, updated source code for ANY files that were modified.
+
+**Learnings from Past Interactions:**
+You have a knowledge base of learnings. Use these principles to guide your changes.
+{{LEARNINGS_SECTION}}
+
+**Website Stack:**
+This website is built using one or more of the following technologies:
+- **UI:** Tailwind CSS & daisyUI
+- **Interactivity:** Alpine.js, htmx, or React (using ES modules and React.createElement).
+
+When you make modifications, you MUST respect and utilize the existing technology stack.
+- If it's a daisyUI site, use daisyUI classes for new components.
+- If it's a React app, modify or create React components using React.createElement.
+- If it uses htmx, continue to use htmx for dynamic behavior.
 
 **CRITICAL RULES FOR MODIFICATION:**
 1.  **Surgical Precision:** You MUST only change the specific elements mentioned by the user. Do NOT alter any other part of the code, design, or layout.
-2.  **Preserve Existing Design:**
-    -   Do NOT change colors, backgrounds, fonts, spacing, or layout unless explicitly told to.
-    -   When adding new elements, they MUST match the styling of existing similar elements.
-3.  **Content-Only Swaps:** When asked to change text (e.g., a name or title), replace only the text content inside the HTML tags. The tags and their classes/styles MUST remain unchanged.
+2.  **Respect the Stack:** Identify the libraries in use and write your code using them. Do not introduce a new library unless explicitly asked.
+3.  **Preserve Existing Design:** Do NOT change colors, fonts, or spacing unless told to. New elements must match the existing style.
 4.  **Targeted Edits, Not Regeneration:** A request to change one element should result in a small, targeted code modification. Do not rewrite or refactor entire files.
-5.  **No Unrequested Changes:** Do not add, remove, or refactor any code, features, or files unless explicitly told to. Your goal is a minimal, targeted edit.
 
-You must return the full content of any file you modify. If a file is not modified, do not include it in your JSON response.
+**Technical Output Requirements:**
+- **JSON ONLY:** You MUST respond with a JSON object ONLY, with no markdown formatting.
+- **File Structure:** The JSON object must have the keys "aiSummary", "commitMessage", "summary", and "files".
+- You must return the full content of any file you modify. If a file is not modified, do not include it in your JSON response.
 `;
 
+export interface AiGenerationResponse {
+  aiSummary: string;
+  commitMessage: string;
+  summary: string;
+  files: FileNode[];
+  changedFileCount: number;
+}
 
-export const generateWebsite = async (prompt: string, project: Project): Promise<FileNode[]> => {
-  let systemInstruction: string;
-  let apiContents: string;
+
+export const generateWebsite = async (
+    prompt: string, 
+    project: Project,
+    attachment: { file: File; dataUrl: string } | null
+): Promise<AiGenerationResponse> => {
+  let systemInstructionTemplate: string;
+  const model = 'gemini-2.5-flash';
+
+  const learnings = await learningService.getLearnings();
+  const learningsText = learnings.length > 0
+    ? `\nHere are some learnings to consider:\n${learnings.map(l => `- ${l.content}`).join('\n')}\n`
+    : 'No specific learnings in the knowledge base yet.';
+
+  const parts: any[] = [];
 
   if (project.files && project.files.length > 0) {
-    // This is a modification request
-    systemInstruction = modificationSystemInstruction;
+    systemInstructionTemplate = modificationSystemInstruction;
     
     const fileContentString = project.files.map(file => `
 --- START OF FILE: ${file.path} ---
@@ -76,31 +164,61 @@ ${file.content}
 --- END OF FILE: ${file.path} ---
     `).join('\n\n');
 
-    apiContents = `
+    const modificationPromptText = `
 Here are the current files of the website:
 ${fileContentString}
 
 Now, please apply the following change based on my request: "${prompt}"
 `;
+    parts.push({ text: modificationPromptText });
 
   } else {
-    // This is a new website creation request
-    systemInstruction = baseSystemInstruction
+    systemInstructionTemplate = baseSystemInstruction
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
       .replace(/\{\{PROJECT_DESCRIPTION\}\}/g, project.description || "A new website project.");
-    apiContents = prompt;
+    parts.push({ text: prompt });
   }
   
+  if (attachment) {
+    const base64Data = attachment.dataUrl.split(',')[1];
+    if (!base64Data) {
+        throw new Error("Invalid attachment data URL.");
+    }
+    parts.push({
+        inlineData: {
+            mimeType: attachment.file.type,
+            data: base64Data
+        }
+    });
+  }
+
+  const systemInstruction = systemInstructionTemplate.replace('{{LEARNINGS_SECTION}}', learningsText);
+
   try {
+    const apiKey = await getActiveApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
     const response = await ai.models.generateContent({
       model: model,
-      contents: apiContents,
+      contents: { parts: parts },
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            aiSummary: {
+              type: Type.STRING,
+              description: "A short summary of the plan or thought process before making changes. E.g., 'I will create a new multi-page React application...'"
+            },
+            commitMessage: {
+              type: Type.STRING,
+              description: "A short, git-style commit message summarizing the change. E.g., 'feat: Create initial React SPA structure'"
+            },
+            summary: {
+                type: Type.STRING,
+                description: "A detailed summary of the changes that were made."
+            },
             files: {
               type: Type.ARRAY,
               items: {
@@ -108,7 +226,7 @@ Now, please apply the following change based on my request: "${prompt}"
                 properties: {
                   path: {
                     type: Type.STRING,
-                    description: "The full path of the file, e.g., index.html or css/styles.css."
+                    description: "The full path of the file, e.g., index.html or components/Header.js."
                   },
                   content: {
                     type: Type.STRING,
@@ -119,15 +237,13 @@ Now, please apply the following change based on my request: "${prompt}"
               }
             }
           },
-          required: ["files"]
+          required: ["aiSummary", "commitMessage", "summary", "files"]
         }
       }
     });
 
     let jsonString = response.text.trim();
     
-    // The model can sometimes wrap the JSON output in markdown code fences.
-    // This regex will find the JSON content within ```json ... ```.
     const markdownMatch = jsonString.match(/^```json\s*([\s\S]*?)\s*```$/);
     if (markdownMatch && markdownMatch[1]) {
         jsonString = markdownMatch[1];
@@ -136,27 +252,38 @@ Now, please apply the following change based on my request: "${prompt}"
     const result = JSON.parse(jsonString);
 
     if (result && Array.isArray(result.files)) {
-      // For modifications, the AI might only return changed files. We need to merge them.
+      let finalFiles: FileNode[];
       if (project.files && project.files.length > 0) {
         const updatedFiles = [...project.files];
         result.files.forEach((newFile: FileNode) => {
           const existingFileIndex = updatedFiles.findIndex(f => f.path === newFile.path);
           if (existingFileIndex !== -1) {
-            // Update existing file
             updatedFiles[existingFileIndex] = newFile;
           } else {
-            // Add new file
             updatedFiles.push(newFile);
           }
         });
-        return updatedFiles;
+        finalFiles = updatedFiles;
+      } else {
+        finalFiles = result.files;
       }
-      return result.files;
+
+      return {
+        aiSummary: result.aiSummary,
+        commitMessage: result.commitMessage,
+        summary: result.summary,
+        files: finalFiles,
+        changedFileCount: result.files.length,
+      };
+
     } else {
       throw new Error("Invalid JSON structure received from API.");
     }
   } catch (error) {
     console.error("Error generating website:", error);
-    throw new Error("Failed to generate website from AI. Please check the console for more details.");
+    if (error instanceof Error && error.message.includes("JSON")) {
+       throw new Error("The AI returned an invalid JSON response. This can happen with complex requests. Please try simplifying your prompt.");
+    }
+    throw new Error(`Failed to generate website from AI. Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 };

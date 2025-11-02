@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { ChatMessage, GenerationState } from '../types';
+import React, { useState, useRef } from 'react';
+import { ChatMessage, GenerationState, Project } from '../types';
 import {
-    PlusIcon, PaperclipIcon, ArrowUpSquareIcon, NewProjectIcon, UndoIcon
+    PlusIcon, PaperclipIcon, ArrowUpSquareIcon, NewProjectIcon, UndoIcon,
+    UserIcon, ChevronRightIcon, CodeBracketIcon, LightbulbIcon, CoinsIcon, XIcon
 } from './icons/Icons';
 import { SidebarHeader } from './WebsiteBuilder';
-
 
 const Sidebar: React.FC<{
     messages: ChatMessage[];
@@ -16,8 +16,19 @@ const Sidebar: React.FC<{
     onOpenProjects: () => void;
     onNewProject: () => void;
     onRollback: (stateIndex: number) => void;
-}> = ({ messages, onSendMessage, generationState, driveStatus, onConnectDrive, onNavigateHome, onOpenProjects, onNewProject, onRollback }) => {
+    onSwitchToCodeView: () => void;
+    onTeach: () => void;
+    activeProject: Project | null;
+    userCoins: number;
+    attachment: { file: File; dataUrl: string } | null;
+    onSetAttachment: (attachment: { file: File; dataUrl: string } | null) => void;
+}> = ({ 
+    messages, onSendMessage, generationState, driveStatus, onConnectDrive, onNavigateHome, 
+    onOpenProjects, onNewProject, onRollback, onSwitchToCodeView, onTeach, activeProject, 
+    userCoins, attachment, onSetAttachment 
+}) => {
     const [prompt, setPrompt] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -27,8 +38,29 @@ const Sidebar: React.FC<{
         }
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                onSetAttachment({
+                    file,
+                    dataUrl: reader.result as string,
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+        if(e.target) {
+            e.target.value = '';
+        }
+    };
+
+    const isFirstPrompt = activeProject ? !activeProject.freePromptUsed : true;
+    const hasEnoughCoins = userCoins >= 10;
+    const canSubmit = (prompt.trim() || attachment) && generationState !== 'generating' && (isFirstPrompt || hasEnoughCoins);
+
     return (
-        <aside className="w-[30%] bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+        <aside className="w-[30%] bg-[#f7f7f8] border-r border-gray-200 flex flex-col flex-shrink-0">
             <SidebarHeader 
               driveStatus={driveStatus} 
               onConnectDrive={onConnectDrive}
@@ -36,7 +68,7 @@ const Sidebar: React.FC<{
               onOpenProjects={onOpenProjects}
               onNewProject={onNewProject}
             />
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white">
                 <h2 className="text-sm font-semibold text-gray-800">Chat</h2>
                 <button 
                   onClick={onNewProject} 
@@ -46,7 +78,7 @@ const Sidebar: React.FC<{
                   <span>New Project</span>
                 </button>
             </div>
-            <div className="flex-1 p-4 overflow-y-auto space-y-4">
+            <div className="flex-1 p-4 overflow-y-auto space-y-6">
                 {messages.map((msg) => {
                     if (msg.role === 'system') {
                         return (
@@ -55,25 +87,75 @@ const Sidebar: React.FC<{
                             </div>
                         );
                     }
-                    return (
-                        <div key={msg.id} className="text-sm text-gray-700">
-                            <p className="font-semibold text-gray-900 mb-1">
-                                {msg.role === 'model' ? 'Doveable AI' : 'You'}
-                            </p>
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
-                            {msg.rollbackStateIndex !== undefined && (
-                                <div className="mt-2">
-                                    <button
-                                        onClick={() => onRollback(msg.rollbackStateIndex!)}
-                                        className="flex items-center space-x-1.5 px-2 py-1 text-xs font-semibold text-purple-600 bg-purple-50 rounded-md hover:bg-purple-100 hover:text-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500 transition-colors"
-                                    >
-                                        <UndoIcon className="w-3.5 h-3.5" />
-                                        <span>Roll back changes (#{msg.rollbackStateIndex + 1})</span>
-                                    </button>
+                    if (msg.role === 'user') {
+                        return (
+                            <div key={msg.id} className="flex space-x-3">
+                                <div className="w-6 h-6 bg-gray-200 rounded-full flex-shrink-0 flex items-center justify-center mt-1">
+                                    <UserIcon className="w-4 h-4 text-gray-600" />
                                 </div>
-                            )}
-                        </div>
-                    );
+                                <div className="flex-1 bg-white p-3 rounded-lg border border-gray-200/80">
+                                    <p className="font-semibold text-gray-900 mb-1 text-sm">
+                                        You
+                                    </p>
+                                    {msg.content && <p className="whitespace-pre-wrap text-sm text-gray-700">{msg.content}</p>}
+                                    {msg.attachment && (
+                                        <div className="mt-2">
+                                            <img src={msg.attachment.dataUrl} alt={msg.attachment.name} className="max-w-full h-auto rounded-md border" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    }
+                    if (msg.role === 'model') {
+                        return (
+                            <div key={msg.id} className="bg-white rounded-lg border border-gray-200/80 overflow-hidden text-sm">
+                                <div className="p-3">
+                                    {msg.thoughtDuration !== undefined && (
+                                        <p className="text-xs text-gray-500">Thought for {msg.thoughtDuration}s</p>
+                                    )}
+                                    {msg.aiSummary && <p className="mt-2 text-gray-800 whitespace-pre-wrap">{msg.aiSummary}</p>}
+                                    
+                                    {msg.editsMade !== undefined && msg.editsMade > 0 && (
+                                        <div className="text-xs text-gray-600 mt-3 flex justify-between items-center py-1">
+                                            <span>{msg.editsMade} edits made</span>
+                                            <button className="font-semibold text-gray-800 hover:underline">Show all</button>
+                                        </div>
+                                    )}
+                                    
+                                    {msg.content && <p className="mt-1 text-gray-600 whitespace-pre-wrap">{msg.content}</p>}
+                                </div>
+                                
+                                {msg.commitMessage && (
+                                    <div className="bg-gray-50 border-t border-gray-200 px-3 py-2 flex items-center justify-between">
+                                        <button className="flex items-center space-x-1 text-blue-600 font-medium text-sm hover:underline">
+                                            <span className="truncate">{msg.commitMessage}</span>
+                                            <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />
+                                        </button>
+                                        <div className="flex items-center space-x-3">
+                                            {msg.rollbackStateIndex !== undefined && (
+                                                <button
+                                                    onClick={() => onRollback(msg.rollbackStateIndex!)}
+                                                    className="flex items-center space-x-1.5 text-xs font-semibold text-gray-600 hover:text-black"
+                                                >
+                                                    <UndoIcon className="w-3 h-3" />
+                                                    <span>Restore</span>
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={onSwitchToCodeView} 
+                                                className="flex items-center space-x-1.5 text-xs font-semibold text-gray-600 hover:text-black"
+                                            >
+                                                <CodeBracketIcon className="w-4 h-4" />
+                                                <span>Code</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    }
+                    return null;
                 })}
                  {generationState === 'generating' && (
                     <div className="flex items-center space-x-2 text-sm text-gray-500">
@@ -85,32 +167,73 @@ const Sidebar: React.FC<{
                     </div>
                 )}
             </div>
-            <div className="p-4 border-t border-gray-200">
+            <div className="p-4 border-t border-gray-200 bg-white">
                 <form onSubmit={handleSubmit} className="space-y-2">
                     <textarea
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Here write ask to Doveable....."
+                        placeholder="Describe the website you want to build, or the changes you want to make..."
                         className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none text-sm"
                         rows={3}
                         disabled={generationState === 'generating'}
                     />
+                    {attachment && (
+                        <div className="mt-2 p-2 border rounded-lg flex items-center justify-between bg-gray-50">
+                            <div className="flex items-center space-x-2 overflow-hidden">
+                                <img src={attachment.dataUrl} alt="Preview" className="w-10 h-10 rounded object-cover" />
+                                <div className="text-xs overflow-hidden">
+                                    <p className="font-medium text-gray-700 truncate">{attachment.file.name}</p>
+                                    <p className="text-gray-500">{Math.round(attachment.file.size / 1024)} KB</p>
+                                </div>
+                            </div>
+                            <button type="button" onClick={() => onSetAttachment(null)} className="p-1 rounded-full hover:bg-gray-200 flex-shrink-0">
+                                <XIcon className="w-4 h-4 text-gray-600" />
+                            </button>
+                        </div>
+                    )}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-1">
-                            <button type="button" className="p-2 rounded-md hover:bg-gray-100 text-gray-500">
-                                <PlusIcon className="w-5 h-5" />
+                            <button type="button" onClick={onTeach} title="Teach Doveable" className="p-2 rounded-md hover:bg-gray-100 text-gray-500">
+                                <LightbulbIcon className="w-5 h-5" />
                             </button>
-                             <button type="button" className="p-2 rounded-md hover:bg-gray-100 text-gray-500">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                onChange={handleFileChange}
+                                accept="image/png, image/jpeg, image/webp, image/gif"
+                            />
+                            <button 
+                                type="button" 
+                                className="p-2 rounded-md hover:bg-gray-100 text-gray-500"
+                                onClick={() => fileInputRef.current?.click()}
+                                title="Attach an image"
+                            >
                                 <PaperclipIcon className="w-5 h-5" />
                             </button>
                         </div>
-                        <button 
-                            type="submit"
-                            className="w-9 h-9 bg-black text-white rounded-md flex items-center justify-center disabled:bg-gray-400"
-                            disabled={!prompt.trim() || generationState === 'generating'}
-                        >
-                            <ArrowUpSquareIcon className="w-5 h-5" />
-                        </button>
+                        
+                        <div className="flex items-center space-x-3">
+                            <div className="text-xs text-gray-500 text-right">
+                                {activeProject && !activeProject.freePromptUsed && !hasEnoughCoins && <span className="text-red-500">Not enough coins</span>}
+                                {activeProject && activeProject.freePromptUsed && hasEnoughCoins &&
+                                    <span className="flex items-center space-x-1">
+                                        <CoinsIcon className="w-3 h-3 text-yellow-500" />
+                                        <span>Cost: 10 Coins</span>
+                                    </span>
+                                }
+                                {(!activeProject || (activeProject && !activeProject.freePromptUsed)) &&
+                                    <span className="font-medium text-purple-600">First prompt is free</span>
+                                }
+                            </div>
+                            <button 
+                                type="submit"
+                                className="w-9 h-9 bg-black text-white rounded-md flex items-center justify-center disabled:bg-gray-400"
+                                disabled={!canSubmit}
+                            >
+                                <ArrowUpSquareIcon className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
