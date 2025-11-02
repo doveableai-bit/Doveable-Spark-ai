@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { PreviewPanel } from './PreviewPanel';
-import { FileNode, ChatMessage, AiLog, GenerationState, DriveAccount, Project, Learning, User, CoinRate } from '../types';
+import { FileNode, ChatMessage, AiLog, GenerationState, DriveAccount, Project, User, CoinRate } from '../types';
 import { generateWebsite } from '../services/geminiService';
 import { googleDriveService } from '../services/googleDriveService';
 import { supabaseService } from '../services/supabaseService';
@@ -9,7 +9,6 @@ import { learningService } from '../services/learningService';
 import { MyProjectsModal } from './MyProjectsModal';
 import { SupabaseModal } from './SupabaseModal';
 import { GitHubModal } from './GitHubModal';
-import { TeachDoveableModal } from './TeachDoveableModal';
 import { 
     CoinsIcon, NewProjectIcon, HomeIcon, 
     CogIcon, FolderIcon, LogoutIcon, PencilIcon, ArrowDownTrayIcon,
@@ -21,6 +20,7 @@ import Sidebar from './Sidebar';
 import { LogsPanel } from './LogsPanel';
 import { PaymentModal } from './PaymentModal';
 import { InsufficientCoinsModal } from './InsufficientCoinsModal';
+import { AdDisplay } from './AdDisplay';
 
 declare var JSZip: any;
 
@@ -244,6 +244,112 @@ const NewProjectModal: React.FC<{
   );
 };
 
+const ProjectSetupModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (name: string, description: string) => void;
+  project: Project | null;
+}> = ({ isOpen, onClose, onSave, project }) => {
+  const [name, setName] = useState(project?.name || '');
+  const [description, setDescription] = useState(project?.description || '');
+
+  useEffect(() => {
+    if (project) {
+        setName(project.name);
+        setDescription(project.description);
+    }
+  }, [project]);
+
+  if (!isOpen || !project) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (name.trim()) {
+      onSave(name.trim(), description.trim());
+    }
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md transform transition-all animate-fade-in-up">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-800">Setup Your Project</h3>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200">
+            <XIcon className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-gray-600">Give your new project a name and description before we generate it.</p>
+            <div>
+              <label htmlFor="setupProjectName" className="block text-sm font-medium text-gray-700 mb-1">
+                Project Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                id="setupProjectName"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm"
+                placeholder="e.g., My Awesome Landing Page"
+                required
+                autoFocus
+              />
+            </div>
+            <div>
+              <label htmlFor="setupProjectDescription" className="block text-sm font-medium text-gray-700 mb-1">
+                Project Description
+              </label>
+              <textarea
+                id="setupProjectDescription"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none text-sm"
+                rows={4}
+                placeholder="Briefly describe what this project is about."
+              />
+            </div>
+          </div>
+          <div className="p-4 bg-gray-50 border-t rounded-b-lg flex justify-end items-center space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 text-sm font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-brand-primary text-white text-sm font-medium rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-gray-400"
+              disabled={!name.trim()}
+            >
+              Save & Generate
+            </button>
+          </div>
+        </form>
+        <style>{`
+          @keyframes fade-in-up {
+              from { opacity: 0; transform: translateY(20px); }
+              to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fade-in-up {
+              animation: fade-in-up 0.3s ease-out forwards;
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+};
+
 
 export const SidebarHeader: React.FC<{
     driveStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -332,33 +438,28 @@ export const SidebarHeader: React.FC<{
 };
 
 const MainHeader: React.FC<{
-    projectName: string;
-    isUnsaved: boolean;
+    project: Project;
+    onUpdateProjectName: (newName: string) => void;
+    onDownloadZip: () => void;
     onNavigateHome: () => void;
     projectCount: number;
     onOpenProjects: () => void;
     user: User;
-    onUpdateProjectName: (newName: string) => void;
-    onDownloadZip: () => void;
-    supabaseStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
-    githubStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
     onConnectSupabase: () => void;
     onConnectGitHub: () => void;
     onNavigateToSubscriptions: () => void;
-}> = ({ projectName, onUpdateProjectName, onDownloadZip, onNavigateHome, projectCount, onOpenProjects, user, supabaseStatus, githubStatus, onConnectSupabase, onConnectGitHub, onNavigateToSubscriptions }) => {
+}> = ({ project, onUpdateProjectName, onDownloadZip, onNavigateHome, projectCount, onOpenProjects, user, onConnectSupabase, onConnectGitHub, onNavigateToSubscriptions }) => {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isDeployMenuOpen, setIsDeployMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
     const deployMenuRef = useRef<HTMLDivElement>(null);
     const [isEditingName, setIsEditingName] = useState(false);
-    const [tempProjectName, setTempProjectName] = useState(projectName);
+    const [tempProjectName, setTempProjectName] = useState(project.name);
     const nameInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (projectName) {
-            setTempProjectName(projectName);
-        }
-    }, [projectName]);
+        setTempProjectName(project.name);
+    }, [project.name]);
 
     useEffect(() => {
         if (isEditingName) {
@@ -368,7 +469,7 @@ const MainHeader: React.FC<{
     }, [isEditingName]);
 
     const handleNameUpdate = () => {
-        if (tempProjectName.trim() && tempProjectName.trim() !== projectName) {
+        if (tempProjectName.trim() && tempProjectName.trim() !== project.name) {
             onUpdateProjectName(tempProjectName.trim());
         }
         setIsEditingName(false);
@@ -396,6 +497,9 @@ const MainHeader: React.FC<{
     };
 
     const userInitials = getInitials(user.name);
+    const isSupabaseConnected = !!project.supabase;
+    const isGithubConnected = !!project.github;
+
 
     return (
         <header className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between flex-shrink-0 h-[57px]">
@@ -410,14 +514,14 @@ const MainHeader: React.FC<{
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') handleNameUpdate();
                             if (e.key === 'Escape') {
-                                setTempProjectName(projectName);
+                                setTempProjectName(project.name);
                                 setIsEditingName(false);
                             }
                         }}
                         className="text-sm font-semibold text-gray-800 bg-white border border-purple-400 rounded-md px-1 -my-1"
                     />
                 ) : (
-                    <h1 className="text-sm font-semibold text-gray-800">{projectName}</h1>
+                    <h1 className="text-sm font-semibold text-gray-800">{project.name}</h1>
                 )}
                 <button onClick={() => setIsEditingName(true)} className="flex-shrink-0 p-1 hover:bg-gray-100 rounded-full">
                     <PencilIcon className="w-4 h-4 text-gray-500 cursor-pointer"/>
@@ -437,13 +541,13 @@ const MainHeader: React.FC<{
                         <div className="absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg z-20 border border-gray-100 py-1">
                             <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase">Integrations</div>
                             <div className="px-2">
-                                <button onClick={() => { onConnectSupabase(); setIsDeployMenuOpen(false); }} disabled={supabaseStatus === 'connected'} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md disabled:opacity-60 disabled:cursor-not-allowed">
+                                <button onClick={() => { onConnectSupabase(); setIsDeployMenuOpen(false); }} disabled={isSupabaseConnected} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md disabled:opacity-60 disabled:cursor-not-allowed">
                                     <span className="flex items-center"><SupabaseIcon className="w-4 h-4 mr-3" /> Supabase</span>
-                                    {supabaseStatus === 'connected' && <CheckIcon className="w-4 h-4 text-green-500" />}
+                                    {isSupabaseConnected && <CheckIcon className="w-4 h-4 text-green-500" />}
                                 </button>
-                                <button onClick={() => { onConnectGitHub(); setIsDeployMenuOpen(false); }} disabled={githubStatus === 'connected'} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md disabled:opacity-60 disabled:cursor-not-allowed">
+                                <button onClick={() => { onConnectGitHub(); setIsDeployMenuOpen(false); }} disabled={isGithubConnected} className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md disabled:opacity-60 disabled:cursor-not-allowed">
                                     <span className="flex items-center"><GitHubIcon className="w-4 h-4 mr-3" /> GitHub</span>
-                                    {githubStatus === 'connected' && <CheckIcon className="w-4 h-4 text-green-500" />}
+                                    {isGithubConnected && <CheckIcon className="w-4 h-4 text-green-500" />}
                                 </button>
                             </div>
                             <div className="border-t border-gray-100 my-1"></div>
@@ -531,9 +635,7 @@ const Toolbar: React.FC<{
     setDevice: (device: 'desktop' | 'tablet' | 'mobile') => void;
     onRefresh: () => void;
     onFullScreen: () => void;
-    onToggleLogs: () => void;
-    isLogsPanelOpen: boolean;
-}> = ({ activeTab, setActiveTab, device, setDevice, onRefresh, onFullScreen, onToggleLogs, isLogsPanelOpen }) => {
+}> = ({ activeTab, setActiveTab, device, setDevice, onRefresh, onFullScreen }) => {
     const [isDeviceMenuOpen, setDeviceMenuOpen] = useState(false);
     const deviceMenuRef = useRef<HTMLDivElement>(null);
 
@@ -608,14 +710,6 @@ const Toolbar: React.FC<{
                  <button onClick={onRefresh} title="Refresh Preview" className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600">
                      <RefreshIcon className="w-4 h-4" />
                  </button>
-                 <button 
-                    onClick={onToggleLogs} 
-                    title={isLogsPanelOpen ? "Hide Logs" : "Show Logs"} 
-                    className={`flex items-center space-x-2 text-sm px-2 py-1 rounded-md ${isLogsPanelOpen ? 'text-purple-700 bg-purple-100' : 'text-gray-600 hover:bg-gray-100'}`}
-                >
-                    <TerminalIcon className="h-4 w-4" />
-                    <span>Logs</span>
-                 </button>
             </div>
         </div>
     );
@@ -640,16 +734,11 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
     
     const [activeProject, setActiveProject] = useState<Project | null>(null);
     const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+    const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
     const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
 
-    const [supabaseStatus, setSupabaseStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-    const [githubStatus, setGithubStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
     const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
     const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
-
-    const [isLogsPanelOpen, setIsLogsPanelOpen] = useState(true);
-    const [isTeachModalOpen, setIsTeachModalOpen] = useState(false);
-    const [learnings, setLearnings] = useState<Learning[]>([]);
     
     const [attachment, setAttachment] = useState<{ file: File; dataUrl: string } | null>(null);
     const isFirstRender = useRef(true);
@@ -715,7 +804,6 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
     useEffect(() => {
         const fetchInitialData = async () => {
             const initialLearnings = await learningService.getLearnings();
-            setLearnings(initialLearnings);
             addLog(`Loaded ${initialLearnings.length} learnings from knowledge base.`);
             
             const rates = await supabaseService.getCoinRates();
@@ -791,40 +879,51 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
         }
     }, [addLog]);
 
+    const updateProjectState = (updatedProject: Project) => {
+        setActiveProject(updatedProject);
+        setProjects(prevProjects => 
+            prevProjects.map(p => p.id === updatedProject.id ? updatedProject : p)
+        );
+    };
+    
     const handleConnectSupabase = useCallback(async (details: { url: string; anonKey: string }) => {
         setIsSupabaseModalOpen(false);
-        setSupabaseStatus('connecting');
-        addLog('Connecting to Supabase...');
+        if (!activeProject) return;
+
+        addLog(`Connecting project "${activeProject.name}" to Supabase...`);
         try {
-            await supabaseService.connect(details);
-            setSupabaseStatus('connected');
+            await supabaseService.connect(details); // Simulate connection
+            const updatedProject = { ...activeProject, supabase: details };
+            updateProjectState(updatedProject);
+            
             addLog('Successfully connected to Supabase.', 'success');
-            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: 'Supabase connected. Projects will now be saved automatically.'}]);
+            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Project "${activeProject.name}" connected to Supabase. Future changes will be saved.`}]);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-            setSupabaseStatus('error');
             addLog(`Failed to connect to Supabase: ${errorMessage}`, 'error');
         }
-    }, [addLog]);
+    }, [addLog, activeProject]);
 
-    const handleConnectGitHub = useCallback(async (details: { repoUrl: string }) => {
+    const handleConnectGitHub = useCallback(async (details: { token: string }) => {
         setIsGitHubModalOpen(false);
-        setGithubStatus('connecting');
-        addLog('Connecting to GitHub...');
+        if (!activeProject) return;
+
+        addLog(`Connecting project "${activeProject.name}" to GitHub...`);
         try {
-            await githubService.connect(details);
-            setGithubStatus('connected');
-            addLog('Successfully connected to GitHub.', 'success');
-            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: 'GitHub connected. Code files will be pushed automatically.'}]);
+            const { repoUrl } = await githubService.connect({ token: details.token, projectName: activeProject.name });
+            const updatedProject = { ...activeProject, github: { repoUrl } };
+            updateProjectState(updatedProject);
+
+            addLog(`Successfully connected to GitHub. New repository created at: ${repoUrl}`, 'success');
+            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Project "${activeProject.name}" connected to GitHub repo: ${repoUrl}. Future changes will be pushed.`}]);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-            setGithubStatus('error');
             addLog(`Failed to connect to GitHub: ${errorMessage}`, 'error');
         }
-    }, [addLog]);
+    }, [addLog, activeProject]);
 
     const handleSaveToIntegrations = useCallback(async (projectToSave: Project) => {
-        if (supabaseStatus === 'connected') {
+        if (projectToSave.supabase) {
             addLog(`Saving project "${projectToSave.name}" to Supabase...`);
             try {
                 await supabaseService.saveProject(projectToSave);
@@ -835,8 +934,8 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
             }
         }
 
-        if (githubStatus === 'connected') {
-            addLog(`Pushing files for "${projectToSave.name}" to GitHub...`);
+        if (projectToSave.github) {
+            addLog(`Pushing files for "${projectToSave.name}" to GitHub repo: ${projectToSave.github.repoUrl}`);
             try {
                 await githubService.saveFiles(projectToSave.files, `Update from Doveable AI: ${new Date().toISOString()}`);
                 addLog('Files pushed to GitHub successfully.', 'success');
@@ -845,7 +944,7 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
                 addLog(`Failed to push files to GitHub: ${errorMessage}`, 'error');
             }
         }
-    }, [supabaseStatus, githubStatus, addLog]);
+    }, [addLog]);
 
     const handleRollback = useCallback((stateIndex: number) => {
         if (!activeProject || !activeProject.history[stateIndex]) {
@@ -898,12 +997,7 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
     const handleUpdateActiveProjectName = (newName: string) => {
         if (activeProject) {
             const updatedProject = { ...activeProject, name: newName };
-            setActiveProject(updatedProject);
-            setProjects(prevProjects =>
-                prevProjects.map(p =>
-                    p.id === activeProject.id ? updatedProject : p
-                )
-            );
+            updateProjectState(updatedProject);
             addLog(`Project name updated to "${newName}".`, 'success');
         }
     };
@@ -1013,9 +1107,8 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
                  addLog('First free prompt used for this project.', 'info');
             }
 
-            setActiveProject(updatedProject);
+            updateProjectState(updatedProject);
             setFiles(aiResponse.files);
-            setProjects(prev => prev.map(p => p.id === project.id ? updatedProject : p));
             setGenerationState('success');
             setPreviewKey(k => k + 1);
             
@@ -1044,6 +1137,13 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
             return;
         }
         
+        // If project has no files, it's the first prompt. Show setup modal.
+        if (projectToUse.files.length === 0) {
+            setPendingPrompt(prompt);
+            setIsSetupModalOpen(true);
+            return;
+        }
+
         runGeneration(prompt, projectToUse, attachment);
         setAttachment(null);
     }, [activeProject, runGeneration, attachment]);
@@ -1070,23 +1170,33 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
         addLog(`Started new project: "${name}"`);
 
         if (pendingPrompt) {
-            handleSendMessage(pendingPrompt, newProject);
+            runGeneration(pendingPrompt, newProject, attachment);
+            setAttachment(null);
             setPendingPrompt(null);
         }
     };
-
-    const handleSaveLearning = async (learningContent: string) => {
-        addLog('Saving new learning to knowledge base...', 'info');
-        try {
-            const newLearning = await learningService.saveLearning(learningContent);
-            setLearnings(prev => [...prev, newLearning]);
-            addLog('Successfully saved new learning!', 'success');
-            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: 'Thanks! I\'ve saved that to my knowledge base to use in the future.' }]);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-            addLog(`Failed to save learning: ${errorMessage}`, 'error');
+    
+    const handleSetupAndGenerate = useCallback((name: string, description: string) => {
+        setIsSetupModalOpen(false);
+        if (!activeProject || !pendingPrompt) {
+            addLog("Error: Missing project or prompt for setup generation.", 'error');
+            return;
         }
-    };
+
+        const updatedProject = {
+            ...activeProject,
+            name,
+            description,
+        };
+
+        updateProjectState(updatedProject);
+        addLog(`Project setup complete. Name: "${name}"`);
+
+        runGeneration(pendingPrompt, updatedProject, attachment);
+        setAttachment(null);
+        setPendingPrompt(null);
+    }, [activeProject, pendingPrompt, attachment, addLog, runGeneration]);
+
 
     const handleSwitchToCodeView = () => {
         setActiveTab('code');
@@ -1106,7 +1216,6 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
                 onNewProject={handleNewProject}
                 onRollback={handleRollback}
                 onSwitchToCodeView={handleSwitchToCodeView}
-                onTeach={() => setIsTeachModalOpen(true)}
                 activeProject={activeProject}
                 userCoins={user.coins}
                 attachment={attachment}
@@ -1117,16 +1226,13 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
             {activeProject ? (
                 <>
                 <MainHeader
-                    projectName={activeProject.name}
-                    isUnsaved={false}
+                    project={activeProject}
                     onNavigateHome={onNavigateHome}
                     projectCount={projects.length}
                     onOpenProjects={() => setIsProjectsModalOpen(true)}
                     user={user}
                     onUpdateProjectName={handleUpdateActiveProjectName}
                     onDownloadZip={handleDownloadZip}
-                    supabaseStatus={supabaseStatus}
-                    githubStatus={githubStatus}
                     onConnectSupabase={() => setIsSupabaseModalOpen(true)}
                     onConnectGitHub={() => setIsGitHubModalOpen(true)}
                     onNavigateToSubscriptions={onNavigateToSubscriptions}
@@ -1138,8 +1244,6 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
                     setDevice={setDevice}
                     onRefresh={() => setPreviewKey(k => k + 1)}
                     onFullScreen={handleOpenPreviewInNewTab}
-                    onToggleLogs={() => setIsLogsPanelOpen(p => !p)}
-                    isLogsPanelOpen={isLogsPanelOpen}
                 />
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-1 flex flex-col min-w-0">
@@ -1152,11 +1256,9 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
                             previewKey={previewKey}
                         />
                     </div>
-                    {isLogsPanelOpen && (
-                        <div className="flex-shrink-0 h-[30%] border-t border-gray-200">
-                            <LogsPanel logs={logs} onClose={() => setIsLogsPanelOpen(false)} />
-                        </div>
-                    )}
+                    <div className="flex-shrink-0 border-t border-gray-200 bg-yellow-50/50 min-h-[150px] flex items-center justify-center">
+                        <AdDisplay placement="Bottom Banner" />
+                    </div>
                 </div>
                 </>
             ) : (
@@ -1189,6 +1291,13 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
             onSave={handleSaveNewProject}
         />
 
+        <ProjectSetupModal
+            isOpen={isSetupModalOpen}
+            onClose={() => setIsSetupModalOpen(false)}
+            onSave={handleSetupAndGenerate}
+            project={activeProject}
+        />
+
         <MyProjectsModal
             isOpen={isProjectsModalOpen}
             onClose={() => setIsProjectsModalOpen(false)}
@@ -1207,12 +1316,6 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
             isOpen={isGitHubModalOpen}
             onClose={() => setIsGitHubModalOpen(false)}
             onConnect={handleConnectGitHub}
-        />
-
-        <TeachDoveableModal
-            isOpen={isTeachModalOpen}
-            onClose={() => setIsTeachModalOpen(false)}
-            onSave={handleSaveLearning}
         />
 
         <InsufficientCoinsModal

@@ -4,18 +4,18 @@ import { XIcon } from './icons/Icons';
 interface GitHubModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConnect: (details: { repoUrl: string }) => void;
+  onConnect: (details: { token: string }) => void;
 }
 
 export const GitHubModal: React.FC<GitHubModalProps> = ({ isOpen, onClose, onConnect }) => {
-  const [repoUrl, setRepoUrl] = useState('');
+  const [token, setToken] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (repoUrl.trim()) {
-      onConnect({ repoUrl: repoUrl.trim() });
+    if (token.trim()) {
+      onConnect({ token: token.trim() });
     }
   };
 
@@ -40,27 +40,31 @@ export const GitHubModal: React.FC<GitHubModalProps> = ({ isOpen, onClose, onCon
         <form onSubmit={handleSubmit}>
           <div className="p-6 space-y-4">
             <div>
-              <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 mb-1">
-                Repository URL <span className="text-red-500">*</span>
+              <label htmlFor="github-token" className="block text-sm font-medium text-gray-700 mb-1">
+                Personal Access Token <span className="text-red-500">*</span>
               </label>
               <input
-                type="url"
-                id="repoUrl"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-purple-500"
-                placeholder="https://github.com/user/repo"
+                type="password"
+                id="github-token"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                placeholder="ghp_..."
                 required
               />
+               <p className="mt-2 text-xs text-gray-500">
+                A new repository will be created for this project. Ensure your token has <code className="bg-gray-100 p-0.5 rounded">repo</code> scope.
+                Your token is only used for this session and is not stored.
+              </p>
             </div>
           </div>
           <div className="p-4 bg-gray-50 border-t rounded-b-lg flex justify-end">
             <button
               type="submit"
               className="px-4 py-2 bg-brand-primary text-white text-sm font-medium rounded-md hover:bg-purple-700 disabled:bg-gray-400"
-              disabled={!repoUrl.trim()}
+              disabled={!token.trim()}
             >
-              Connect
+              Connect & Create Repo
             </button>
           </div>
         </form>

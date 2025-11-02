@@ -17,14 +17,13 @@ const Sidebar: React.FC<{
     onNewProject: () => void;
     onRollback: (stateIndex: number) => void;
     onSwitchToCodeView: () => void;
-    onTeach: () => void;
     activeProject: Project | null;
     userCoins: number;
     attachment: { file: File; dataUrl: string } | null;
     onSetAttachment: (attachment: { file: File; dataUrl: string } | null) => void;
 }> = ({ 
     messages, onSendMessage, generationState, driveStatus, onConnectDrive, onNavigateHome, 
-    onOpenProjects, onNewProject, onRollback, onSwitchToCodeView, onTeach, activeProject, 
+    onOpenProjects, onNewProject, onRollback, onSwitchToCodeView, activeProject, 
     userCoins, attachment, onSetAttachment 
 }) => {
     const [prompt, setPrompt] = useState('');
@@ -193,9 +192,6 @@ const Sidebar: React.FC<{
                     )}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-1">
-                            <button type="button" onClick={onTeach} title="Teach Doveable" className="p-2 rounded-md hover:bg-gray-100 text-gray-500">
-                                <LightbulbIcon className="w-5 h-5" />
-                            </button>
                             <input
                                 type="file"
                                 ref={fileInputRef}

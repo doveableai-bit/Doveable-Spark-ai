@@ -49,6 +49,14 @@ export interface Project {
   history: Project[];
   branchedFrom?: { index: number; totalHistoryLength: number };
   freePromptUsed?: boolean;
+  // Per-project integrations
+  supabase?: {
+    url: string;
+    anonKey: string;
+  };
+  github?: {
+    repoUrl: string;
+  };
 }
 
 export interface Learning {

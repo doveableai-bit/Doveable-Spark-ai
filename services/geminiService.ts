@@ -137,6 +137,7 @@ export interface AiGenerationResponse {
   changedFileCount: number;
 }
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const generateWebsite = async (
     prompt: string, 
@@ -194,96 +195,123 @@ Now, please apply the following change based on my request: "${prompt}"
 
   const systemInstruction = systemInstructionTemplate.replace('{{LEARNINGS_SECTION}}', learningsText);
 
-  try {
-    const apiKey = await getActiveApiKey();
-    const ai = new GoogleGenAI({ apiKey });
+  const maxRetries = 3;
+  let attempt = 0;
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: { parts: parts },
-      config: {
-        systemInstruction: systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            aiSummary: {
-              type: Type.STRING,
-              description: "A short summary of the plan or thought process before making changes. E.g., 'I will create a new multi-page React application...'"
-            },
-            commitMessage: {
-              type: Type.STRING,
-              description: "A short, git-style commit message summarizing the change. E.g., 'feat: Create initial React SPA structure'"
-            },
-            summary: {
-                type: Type.STRING,
-                description: "A detailed summary of the changes that were made."
-            },
-            files: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  path: {
-                    type: Type.STRING,
-                    description: "The full path of the file, e.g., index.html or components/Header.js."
-                  },
-                  content: {
-                    type: Type.STRING,
-                    description: "The complete source code for the file."
-                  }
+  while(attempt < maxRetries) {
+    try {
+        const apiKey = await getActiveApiKey();
+        const ai = new GoogleGenAI({ apiKey });
+
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: { parts: parts },
+          config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                aiSummary: {
+                  type: Type.STRING,
+                  description: "A short summary of the plan or thought process before making changes. E.g., 'I will create a new multi-page React application...'"
                 },
-                required: ["path", "content"]
-              }
+                commitMessage: {
+                  type: Type.STRING,
+                  description: "A short, git-style commit message summarizing the change. E.g., 'feat: Create initial React SPA structure'"
+                },
+                summary: {
+                    type: Type.STRING,
+                    description: "A detailed summary of the changes that were made."
+                },
+                files: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      path: {
+                        type: Type.STRING,
+                        description: "The full path of the file, e.g., index.html or components/Header.js."
+                      },
+                      content: {
+                        type: Type.STRING,
+                        description: "The complete source code for the file."
+                      }
+                    },
+                    required: ["path", "content"]
+                  }
+                }
+              },
+              required: ["aiSummary", "commitMessage", "summary", "files"]
             }
-          },
-          required: ["aiSummary", "commitMessage", "summary", "files"]
-        }
-      }
-    });
-
-    let jsonString = response.text.trim();
-    
-    const markdownMatch = jsonString.match(/^```json\s*([\s\S]*?)\s*```$/);
-    if (markdownMatch && markdownMatch[1]) {
-        jsonString = markdownMatch[1];
-    }
-
-    const result = JSON.parse(jsonString);
-
-    if (result && Array.isArray(result.files)) {
-      let finalFiles: FileNode[];
-      if (project.files && project.files.length > 0) {
-        const updatedFiles = [...project.files];
-        result.files.forEach((newFile: FileNode) => {
-          const existingFileIndex = updatedFiles.findIndex(f => f.path === newFile.path);
-          if (existingFileIndex !== -1) {
-            updatedFiles[existingFileIndex] = newFile;
-          } else {
-            updatedFiles.push(newFile);
           }
         });
-        finalFiles = updatedFiles;
-      } else {
-        finalFiles = result.files;
-      }
 
-      return {
-        aiSummary: result.aiSummary,
-        commitMessage: result.commitMessage,
-        summary: result.summary,
-        files: finalFiles,
-        changedFileCount: result.files.length,
-      };
+        let jsonString = response.text.trim();
+        
+        const markdownMatch = jsonString.match(/^```json\s*([\s\S]*?)\s*```$/);
+        if (markdownMatch && markdownMatch[1]) {
+            jsonString = markdownMatch[1];
+        }
 
-    } else {
-      throw new Error("Invalid JSON structure received from API.");
+        const result = JSON.parse(jsonString);
+
+        if (result && Array.isArray(result.files)) {
+          let finalFiles: FileNode[];
+          if (project.files && project.files.length > 0) {
+            const updatedFiles = [...project.files];
+            result.files.forEach((newFile: FileNode) => {
+              const existingFileIndex = updatedFiles.findIndex(f => f.path === newFile.path);
+              if (existingFileIndex !== -1) {
+                updatedFiles[existingFileIndex] = newFile;
+              } else {
+                updatedFiles.push(newFile);
+              }
+            });
+            finalFiles = updatedFiles;
+          } else {
+            finalFiles = result.files;
+          }
+
+          // On success, we return the result and exit the function.
+          return {
+            aiSummary: result.aiSummary,
+            commitMessage: result.commitMessage,
+            summary: result.summary,
+            files: finalFiles,
+            changedFileCount: result.files.length,
+          };
+
+        } else {
+          throw new Error("Invalid JSON structure received from API.");
+        }
+    } catch (error) {
+        attempt++;
+        console.error(`Error generating website (Attempt ${attempt}/${maxRetries}):`, error);
+
+        const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
+        const isRateLimitError = errorMessage.includes('429') || errorMessage.includes('resource has been exhausted');
+
+        if (isRateLimitError && attempt < maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000; // Exponential backoff with jitter
+            console.log(`Rate limit error detected. Retrying in ${Math.round(delay/1000)}s...`);
+            await sleep(delay);
+            // Continue to the next iteration of the loop
+        } else {
+            // This is the final attempt or a non-retriable error.
+            if (isRateLimitError) {
+                // Retries exhausted for rate limit error
+                throw new Error("The AI is currently busy due to high demand. Please wait a moment and try your request again.");
+            }
+            if (errorMessage.includes("json")) {
+               throw new Error("The AI returned an invalid JSON response. This can happen with complex requests. Please try simplifying your prompt.");
+            }
+            // Generic fallback for other errors
+            throw new Error(`Failed to generate website from AI. Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
-  } catch (error) {
-    console.error("Error generating website:", error);
-    if (error instanceof Error && error.message.includes("JSON")) {
-       throw new Error("The AI returned an invalid JSON response. This can happen with complex requests. Please try simplifying your prompt.");
-    }
-    throw new Error(`Failed to generate website from AI. Error: ${error instanceof Error ? error.message : String(error)}`);
   }
+  
+  // This line should not be reached if maxRetries > 0, but serves as a safeguard.
+  throw new Error("Failed to generate website after multiple attempts. Please try again later.");
 };

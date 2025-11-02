@@ -24,7 +24,11 @@ export const AdDisplay: React.FC<{ placement: string }> = ({ placement }) => {
     }, []);
 
     if (!adConfig) {
-        return null; // Don't render anything if no active ad is found
+        return (
+             <div className="w-full h-full p-4 text-center text-gray-400 flex items-center justify-center">
+                <p className="text-sm">Ad space available</p>
+            </div>
+        );
     }
 
     // In a real production application, you would need a secure way
@@ -34,12 +38,12 @@ export const AdDisplay: React.FC<{ placement: string }> = ({ placement }) => {
     // that the correct ad data is being fetched and displayed based on
     // the admin panel settings.
     return (
-        <div className="my-8 p-4 border-2 border-dashed border-gray-300 bg-gray-100 text-center text-gray-500">
+        <div className="p-4 w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300/80 bg-gray-100/50 text-center text-gray-500 rounded-md">
             <p className="font-semibold">Advertisement Placeholder ({placement})</p>
             <p className="text-xs mb-2">
                 Provider: <span className="capitalize font-mono">{adConfig.provider === 'custom' ? adConfig.name : adConfig.provider}</span>
             </p>
-            <pre className="text-xs bg-gray-200 text-gray-600 p-2 rounded overflow-x-auto text-left">
+            <pre className="text-xs bg-gray-200 text-gray-600 p-2 rounded overflow-x-auto text-left w-full max-w-2xl">
                 <code>{adConfig.scriptOrCode}</code>
             </pre>
         </div>

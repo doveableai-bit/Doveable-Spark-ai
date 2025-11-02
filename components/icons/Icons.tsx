@@ -49,9 +49,7 @@ export const XIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 export const RefreshIcon: React.FC<IconProps> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-11.664 0l4.992-4.993m-4.993 0l3.181-3.183a8.25 8.25 0 0111.664 0l3.181 3.183" />
-    </svg>
+    <img src="https://i.supaimg.com/7763cc25-4b40-4e1c-aeb0-352239215b92.jpg" alt="Refresh" className={className} />
 );
 
 
@@ -187,7 +185,7 @@ export const HomeIcon: React.FC<IconProps> = ({ className }) => (
 
 export const CogIcon: React.FC<IconProps> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.26.716.53 1.003l.867.867c.39.39.39 1.024 0 1.414l-.867.867c-.27.287-.467.629-.53 1.003l-.213 1.281c-.09.543-.56.94-1.11.94h-2.593c-.55 0-1.02-.397-1.11-.94l-.213-1.281c-.063-.374-.26-.716-.53-1.003l-.867-.867c-.39-.39-.39-1.024 0-1.414l.867-.867c.27-.287.467-.629.53-1.003l.213-1.281z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.26.716.53 1.003l.867.867c.39.39.39 1.024 0 1.414l-.867.867c-.27.287-.467.629-.53 1.003l-.213 1.281c-.09.543-.56.94-1.11.94h-2.593c-.55 0-1.02-.397-1.11-.94l-.213-1.281c-.063-.374-.26-.716-.53-1.003l-.867-.867c-.39-.39-.39-1.024 0-1.414l.867.867c.27-.287.467-.629.53-1.003l.213-1.281z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
 );
