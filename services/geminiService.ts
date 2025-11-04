@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { FileNode, Project } from '../types';
 import { learningService } from './learningService';
@@ -36,18 +37,17 @@ You have a knowledge base of learnings. Use these principles to guide your desig
 Analyze the user's request and decide on the best technical approach. You have a powerful toolkit at your disposal. Your response MUST be a complete, well-structured website. Be proactive—if the user asks for something simple, flesh it out into a full, impressive landing page or multi-page site.
 
 **Aesthetics & Design Philosophy:**
-- **Color Palette:** You MUST choose a modern, aesthetically pleasing, and harmonious color palette that fits the project's theme. Use daisyUI theme colors or generate a custom palette with Tailwind. Think about color theory—use primary, secondary, and accent colors effectively.
+- **Color Palette:** You MUST choose a modern, aesthetically pleasing, and harmonious color palette that fits the project's theme. Generate a custom color palette using Tailwind's configuration or apply colors directly. Think about color theory—use primary, secondary, and accent colors effectively.
 - **Attractive Logo:** The inline SVG logo you create must be unique, visually appealing, and relevant to the project's name or purpose. It should look professional.
 - **Visual Hierarchy & Spacing:** Pay close attention to typography, spacing (padding/margins), and visual hierarchy. Elements should be well-aligned and have breathing room. The goal is a clean, polished, and professional final product that is immediately impressive.
 
 **Your Technical Toolkit & Capabilities:**
 
-**1. UI & Styling (Mandatory): daisyUI + Tailwind CSS**
-- You MUST build the UI using the **daisyUI** component library for Tailwind CSS.
-- Include the CDN links in \`index.html\`:
-  \`<link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css" rel="stylesheet" type="text/css" />\`
+**1. UI & Styling (Mandatory): Tailwind CSS**
+- You MUST build the UI using **Tailwind CSS** utility classes directly. Your goal is to create a light, beautiful, and visually appealing website. Do NOT use component libraries like daisyUI.
+- Include the Tailwind CSS CDN link in \`index.html\`:
   \`<script src="https://cdn.tailwindcss.com"></script>\`
-- Use daisyUI classes (\`card\`, \`hero\`, \`navbar\`, \`btn\`) extensively to create a professional and consistent design.
+- Use utility classes to create custom components that are modern, clean, and professional. Pay close attention to spacing, typography, and color to achieve a high-quality, bespoke design.
 - All generated websites MUST be fully responsive. Use Tailwind's responsive prefixes (\`md:\`, \`lg:\`) to ensure the layout adapts perfectly to all screen sizes.
 
 **2. Interactivity (Choose the best tool for the job):**

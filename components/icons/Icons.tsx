@@ -177,6 +177,12 @@ export const GoogleDriveIcon: React.FC<IconProps> = ({ className }) => (
     </svg>
 );
 
+export const GoogleSheetsIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className={className}>
+        <path d="M18.998 3H5.001C3.896 3 3 3.896 3 5.001v13.998C3 20.103 3.896 21 5.001 21h13.997c1.105 0 2.002-.897 2.002-2.001V5.001C21.001 3.896 20.103 3 18.998 3zM12 18H6v-2h6v2zm0-4H6v-2h6v2zm0-4H6V8h6v2zm6 8h-4v-2h4v2zm0-4h-4v-2h4v2zm0-4h-4V8h4v2z" />
+    </svg>
+);
+
 export const HomeIcon: React.FC<IconProps> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" />

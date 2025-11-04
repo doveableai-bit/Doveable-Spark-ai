@@ -14,7 +14,7 @@ import {
     CogIcon, FolderIcon, LogoutIcon, PencilIcon, ArrowDownTrayIcon,
     ArrowsPointingOutIcon, ComputerDesktopIcon, DeviceTabletIcon, DevicePhoneMobileIcon, CodeBracketIcon,
     ChevronUpIcon, ChevronDownIcon, MenuIcon, XIcon, RocketIcon, GitHubIcon, SupabaseIcon, CheckIcon, TerminalIcon,
-    RefreshIcon
+    RefreshIcon, GoogleSheetsIcon
 } from './icons/Icons';
 import Sidebar from './Sidebar';
 import { LogsPanel } from './LogsPanel';
@@ -448,7 +448,8 @@ const MainHeader: React.FC<{
     onConnectSupabase: () => void;
     onConnectGitHub: () => void;
     onNavigateToSubscriptions: () => void;
-}> = ({ project, onUpdateProjectName, onDownloadZip, onNavigateHome, projectCount, onOpenProjects, user, onConnectSupabase, onConnectGitHub, onNavigateToSubscriptions }) => {
+    onOpenIntegrations: () => void;
+}> = ({ project, onUpdateProjectName, onDownloadZip, onNavigateHome, projectCount, onOpenProjects, user, onConnectSupabase, onConnectGitHub, onNavigateToSubscriptions, onOpenIntegrations }) => {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isDeployMenuOpen, setIsDeployMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
@@ -598,7 +599,7 @@ const MainHeader: React.FC<{
                                         <CoinsIcon className="w-4 h-4 mr-3 text-gray-500" />
                                         <span>Get coins</span>
                                     </a>
-                                    <a href="#" onClick={() => setIsUserMenuOpen(false)} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <a href="#" onClick={(e) => { e.preventDefault(); onOpenIntegrations(); setIsUserMenuOpen(false); }} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                         <CogIcon className="w-4 h-4 mr-3 text-gray-500" />
                                         <span>Integration</span>
                                     </a>
@@ -715,6 +716,140 @@ const Toolbar: React.FC<{
     );
 }
 
+const GoogleSheetsModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConnect: (details: { privateKeyId: string; clientEmail: string; clientId: string; projectId: string; }) => void;
+}> = ({ isOpen, onClose, onConnect }) => {
+  const [details, setDetails] = useState({ privateKeyId: '', clientEmail: '', clientId: '', projectId: '' });
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (Object.values(details).every(val => val.trim())) {
+      onConnect(details);
+    }
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => { if (e.target === e.currentTarget) onClose(); };
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setDetails({ ...details, [e.target.name]: e.target.value });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={handleBackdropClick}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center space-x-2"><GoogleSheetsIcon className="w-5 h-5" /><span>Connect to Google Sheets</span></h3>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><XIcon className="w-5 h-5 text-gray-600" /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-gray-500">Enter your Google Cloud Service Account credentials. These are stored per-project and are not shared.</p>
+            {Object.keys(details).map(key => (
+              <div key={key}>
+                <label htmlFor={key} className="block text-sm font-medium text-gray-700 mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
+                <input
+                  type="text"
+                  id={key}
+                  name={key}
+                  value={details[key as keyof typeof details]}
+                  onChange={handleChange}
+                  className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-purple-500 font-mono text-xs"
+                  required
+                />
+              </div>
+            ))}
+          </div>
+          <div className="p-4 bg-gray-50 border-t rounded-b-lg flex justify-end">
+            <button type="submit" className="px-4 py-2 bg-brand-primary text-white text-sm font-medium rounded-md hover:bg-purple-700 disabled:bg-gray-400" disabled={!Object.values(details).every(val => val.trim())}>
+              Connect
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const IntegrationsModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    project: Project;
+    onConnectSupabase: () => void;
+    onConnectGitHub: () => void;
+    onConnectGoogleSheets: () => void;
+}> = ({ isOpen, onClose, project, onConnectSupabase, onConnectGitHub, onConnectGoogleSheets }) => {
+    if (!isOpen) return null;
+
+    const integrations = [
+        {
+            name: 'Supabase',
+            icon: <SupabaseIcon className="w-6 h-6" />,
+            description: 'Connect a backend database for your project.',
+            isConnected: !!project.supabase,
+            onConnect: onConnectSupabase,
+        },
+        {
+            name: 'GitHub',
+            icon: <GitHubIcon className="w-6 h-6" />,
+            description: 'Deploy your site to a new GitHub repository.',
+            isConnected: !!project.github,
+            onConnect: onConnectGitHub,
+        },
+        {
+            name: 'Google Sheets',
+            icon: <GoogleSheetsIcon className="w-6 h-6 text-green-600" />,
+            description: 'Read from or write data to Google Sheets.',
+            isConnected: !!project.googleSheets,
+            onConnect: onConnectGoogleSheets,
+        },
+    ];
+
+    const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (e.target === e.currentTarget) onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={handleBackdropClick}>
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl transform transition-all animate-fade-in-up">
+                <div className="p-4 border-b flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-gray-800">Project Integrations</h3>
+                    <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><XIcon className="w-5 h-5 text-gray-600" /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    {integrations.map(int => (
+                        <div key={int.name} className="flex items-center p-3 border rounded-lg">
+                            <div className="mr-4 flex-shrink-0">{int.icon}</div>
+                            <div className="flex-grow">
+                                <h4 className="font-semibold text-gray-900">{int.name}</h4>
+                                <p className="text-sm text-gray-500">{int.description}</p>
+                            </div>
+                            <button
+                                onClick={int.onConnect}
+                                disabled={int.isConnected}
+                                className="px-4 py-1.5 text-sm font-medium rounded-md flex-shrink-0 disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed bg-gray-800 text-white hover:bg-gray-900"
+                            >
+                                {int.isConnected ? 'Connected' : 'Connect'}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <style>{`
+              @keyframes fade-in-up {
+                  from { opacity: 0; transform: translateY(20px); }
+                  to { opacity: 1; transform: translateY(0); }
+              }
+              .animate-fade-in-up {
+                  animation: fade-in-up 0.3s ease-out forwards;
+              }
+            `}</style>
+        </div>
+    );
+};
 
 export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateToSubscriptions: () => void; }> = ({ onNavigateHome, onNavigateToSubscriptions }) => {
     const [files, setFiles] = useState<FileNode[]>([]);
@@ -739,6 +874,8 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
 
     const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
     const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
+    const [isGoogleSheetsModalOpen, setIsGoogleSheetsModalOpen] = useState(false);
+    const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
     
     const [attachment, setAttachment] = useState<{ file: File; dataUrl: string } | null>(null);
     const isFirstRender = useRef(true);
@@ -920,6 +1057,18 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
             const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
             addLog(`Failed to connect to GitHub: ${errorMessage}`, 'error');
         }
+    }, [addLog, activeProject]);
+    
+    const handleConnectGoogleSheets = useCallback(async (details: { privateKeyId: string; clientEmail: string; clientId: string; projectId: string; }) => {
+        setIsGoogleSheetsModalOpen(false);
+        if (!activeProject) return;
+
+        addLog(`Connecting project "${activeProject.name}" to Google Sheets...`);
+        const updatedProject = { ...activeProject, googleSheets: details };
+        updateProjectState(updatedProject);
+        
+        addLog('Successfully configured Google Sheets credentials.', 'success');
+        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Project "${activeProject.name}" connected to Google Sheets.`}]);
     }, [addLog, activeProject]);
 
     const handleSaveToIntegrations = useCallback(async (projectToSave: Project) => {
@@ -1236,6 +1385,7 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
                     onConnectSupabase={() => setIsSupabaseModalOpen(true)}
                     onConnectGitHub={() => setIsGitHubModalOpen(true)}
                     onNavigateToSubscriptions={onNavigateToSubscriptions}
+                    onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
                 />
                 <Toolbar
                     activeTab={activeTab}
@@ -1316,6 +1466,23 @@ export const WebsiteBuilder: React.FC<{ onNavigateHome: () => void; onNavigateTo
             isOpen={isGitHubModalOpen}
             onClose={() => setIsGitHubModalOpen(false)}
             onConnect={handleConnectGitHub}
+        />
+
+        {activeProject && (
+            <IntegrationsModal
+                isOpen={isIntegrationsModalOpen}
+                onClose={() => setIsIntegrationsModalOpen(false)}
+                project={activeProject}
+                onConnectSupabase={() => { setIsIntegrationsModalOpen(false); setIsSupabaseModalOpen(true); }}
+                onConnectGitHub={() => { setIsIntegrationsModalOpen(false); setIsGitHubModalOpen(true); }}
+                onConnectGoogleSheets={() => { setIsIntegrationsModalOpen(false); setIsGoogleSheetsModalOpen(true); }}
+            />
+        )}
+
+        <GoogleSheetsModal
+            isOpen={isGoogleSheetsModalOpen}
+            onClose={() => setIsGoogleSheetsModalOpen(false)}
+            onConnect={handleConnectGoogleSheets}
         />
 
         <InsufficientCoinsModal

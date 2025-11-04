@@ -57,6 +57,12 @@ export interface Project {
   github?: {
     repoUrl: string;
   };
+  googleSheets?: {
+    privateKeyId: string;
+    clientEmail: string;
+    clientId: string;
+    projectId: string;
+  };
 }
 
 export interface Learning {
